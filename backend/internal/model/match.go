@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import "time"
 
@@ -7,13 +7,6 @@ type MatchStatus string
 const (
 	MatchStatusPlaying  MatchStatus = "playing"
 	MatchStatusFinished MatchStatus = "finished"
-)
-
-type MatchEntryType string
-
-const (
-	MatchEntryTypeTransfer MatchEntryType = "transfer"
-	MatchEntryTypeGrant    MatchEntryType = "grant"
 )
 
 // MatchPlayer 保存对局内玩家快照信息。
@@ -25,30 +18,27 @@ type MatchPlayer struct {
 
 // MatchScoreEntry 保存一条记分流水。
 type MatchScoreEntry struct {
-	EntryNo        int            `bson:"entryNo" json:"entryNo"`
-	Type           MatchEntryType `bson:"type" json:"type"`
-	FromUserID     string         `bson:"fromUserId,omitempty" json:"fromUserId,omitempty"`
-	ToUserID       string         `bson:"toUserId,omitempty" json:"toUserId,omitempty"`
-	UserID         string         `bson:"userId,omitempty" json:"userId,omitempty"`
-	Score          int            `bson:"score" json:"score"`
-	OperatorUserID string         `bson:"operatorUserId" json:"operatorUserId"`
-	CreatedAt      time.Time      `bson:"createdAt" json:"createdAt"`
-	UpdatedAt      time.Time      `bson:"updatedAt" json:"updatedAt"`
+	EntryNo    int       `bson:"entryNo" json:"entryNo"`
+	FromUserID string    `bson:"fromUserId" json:"fromUserId"`
+	ToUserID   string    `bson:"toUserId" json:"toUserId"`
+	Score      int       `bson:"score" json:"score"`
+	CreatedAt  time.Time `bson:"createdAt" json:"createdAt"`
+	UpdatedAt  time.Time `bson:"updatedAt" json:"updatedAt"`
 }
 
 // Match 表示一场可持续记分的对局。
 type Match struct {
-	ID          string         `bson:"_id,omitempty" json:"id"`
-	RoomCode    string         `bson:"roomCode" json:"roomCode"`
-	CreatedBy   string         `bson:"createdBy" json:"createdBy"`
-	Status      MatchStatus    `bson:"status" json:"status"`
-	Players     []MatchPlayer  `bson:"players" json:"players"`
+	ID           string            `bson:"_id,omitempty" json:"id"`
+	RoomCode     string            `bson:"roomCode" json:"roomCode"`
+	CreatedBy    string            `bson:"createdBy" json:"createdBy"`
+	Status       MatchStatus       `bson:"status" json:"status"`
+	Players      []MatchPlayer     `bson:"players" json:"players"`
 	ScoreEntries []MatchScoreEntry `bson:"scoreEntries" json:"scoreEntries"`
-	TotalScores map[string]int `bson:"totalScores" json:"totalScores"`
-	StartedAt   *time.Time     `bson:"startedAt,omitempty" json:"startedAt,omitempty"`
-	EndedAt     *time.Time     `bson:"endedAt,omitempty" json:"endedAt,omitempty"`
-	CreatedAt   time.Time      `bson:"createdAt" json:"createdAt"`
-	UpdatedAt   time.Time      `bson:"updatedAt" json:"updatedAt"`
+	TotalScores  map[string]int    `bson:"totalScores" json:"totalScores"`
+	StartedAt    *time.Time        `bson:"startedAt,omitempty" json:"startedAt,omitempty"`
+	EndedAt      *time.Time        `bson:"endedAt,omitempty" json:"endedAt,omitempty"`
+	CreatedAt    time.Time         `bson:"createdAt" json:"createdAt"`
+	UpdatedAt    time.Time         `bson:"updatedAt" json:"updatedAt"`
 }
 
 // NewMatch 创建一个初始化完成的对局实例。
@@ -98,15 +88,12 @@ func (m *Match) Finish() {
 }
 
 // TransferScore 记录一笔玩家之间的分数转移：from 扣分，to 加分。
-func (m *Match) TransferScore(fromUserID, toUserID string, score int, operatorUserID string) (*MatchScoreEntry, error) {
+func (m *Match) TransferScore(fromUserID, toUserID string, score int) (*MatchScoreEntry, error) {
 	if m.Status == MatchStatusFinished {
 		return nil, ErrMatchFinished
 	}
 	if score <= 0 {
 		return nil, ErrScoreMustBePositive
-	}
-	if fromUserID == toUserID {
-		return nil, ErrTransferSameUser
 	}
 	if !m.isUserInMatch(fromUserID) || !m.isUserInMatch(toUserID) {
 		return nil, ErrUserNotInMatch
@@ -114,14 +101,12 @@ func (m *Match) TransferScore(fromUserID, toUserID string, score int, operatorUs
 
 	now := time.Now()
 	entry := MatchScoreEntry{
-		EntryNo:        len(m.ScoreEntries) + 1,
-		Type:           MatchEntryTypeTransfer,
-		FromUserID:     fromUserID,
-		ToUserID:       toUserID,
-		Score:          score,
-		OperatorUserID: operatorUserID,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		EntryNo:    len(m.ScoreEntries) + 1,
+		FromUserID: fromUserID,
+		ToUserID:   toUserID,
+		Score:      score,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	m.ScoreEntries = append(m.ScoreEntries, entry)
 	m.RecalculateTotalScores()
@@ -130,35 +115,13 @@ func (m *Match) TransferScore(fromUserID, toUserID string, score int, operatorUs
 }
 
 // GrantScore 记录一笔用户凭空加分流水。
-func (m *Match) GrantScore(userID string, score int, operatorUserID string) (*MatchScoreEntry, error) {
-	if m.Status == MatchStatusFinished {
-		return nil, ErrMatchFinished
-	}
-	if score <= 0 {
-		return nil, ErrScoreMustBePositive
-	}
-	if !m.isUserInMatch(userID) {
-		return nil, ErrUserNotInMatch
-	}
-
-	now := time.Now()
-	entry := MatchScoreEntry{
-		EntryNo:        len(m.ScoreEntries) + 1,
-		Type:           MatchEntryTypeGrant,
-		UserID:         userID,
-		Score:          score,
-		OperatorUserID: operatorUserID,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
-	m.ScoreEntries = append(m.ScoreEntries, entry)
-	m.RecalculateTotalScores()
-	m.UpdatedAt = now
-	return &entry, nil
+func (m *Match) GrantScore(userID string, score int) (*MatchScoreEntry, error) {
+	// 约定：from==to 表示单用户凭空加分。
+	return m.TransferScore(userID, userID, score)
 }
 
 // UpdateEntryScore 修改某条记分流水的分数。
-func (m *Match) UpdateEntryScore(entryNo int, score int, operatorUserID string) error {
+func (m *Match) UpdateEntryScore(entryNo int, score int) error {
 	if entryNo <= 0 {
 		return ErrEntryNotFound
 	}
@@ -178,20 +141,12 @@ func (m *Match) UpdateEntryScore(entryNo int, score int, operatorUserID string) 
 	}
 
 	target := m.ScoreEntries[index]
-	if target.Type == MatchEntryTypeTransfer && target.FromUserID == target.ToUserID {
-		return ErrTransferSameUser
-	}
-	if target.Type == MatchEntryTypeTransfer &&
-		(!m.isUserInMatch(target.FromUserID) || !m.isUserInMatch(target.ToUserID)) {
-		return ErrUserNotInMatch
-	}
-	if target.Type == MatchEntryTypeGrant && !m.isUserInMatch(target.UserID) {
+	if !m.isUserInMatch(target.FromUserID) || !m.isUserInMatch(target.ToUserID) {
 		return ErrUserNotInMatch
 	}
 
 	now := time.Now()
 	m.ScoreEntries[index].Score = score
-	m.ScoreEntries[index].OperatorUserID = operatorUserID
 	m.ScoreEntries[index].UpdatedAt = now
 	m.RecalculateTotalScores()
 	m.UpdatedAt = now
@@ -206,12 +161,12 @@ func (m *Match) RecalculateTotalScores() {
 	}
 
 	for _, entry := range m.ScoreEntries {
-		switch entry.Type {
-		case MatchEntryTypeTransfer:
+		if entry.FromUserID == entry.ToUserID {
+			// from==to 代表单用户加分。
+			totals[entry.ToUserID] += entry.Score
+		} else {
 			totals[entry.FromUserID] -= entry.Score
 			totals[entry.ToUserID] += entry.Score
-		case MatchEntryTypeGrant:
-			totals[entry.UserID] += entry.Score
 		}
 	}
 	m.TotalScores = totals

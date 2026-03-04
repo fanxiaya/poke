@@ -13,6 +13,5 @@ var (
 	ErrMatchFinished   = errors.New("对局已结束")
 	ErrUserNotInMatch  = errors.New("用户不在对局中")
 	ErrScoreMustBePositive = errors.New("分数必须为正数")
-	ErrTransferSameUser = errors.New("转分双方不能为同一用户")
 	ErrEntryNotFound = errors.New("记分流水不存在")
 )
